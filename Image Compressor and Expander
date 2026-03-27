@@ -1,0 +1,97 @@
+import os
+from tkinter import *
+from tkinter import filedialog, messagebox
+from PIL import Image
+
+selected_files = []
+
+def select_images():
+    global selected_files
+    files = filedialog.askopenfilenames(
+        title='CHOOSE IMAGES',
+        filetypes=[("Image files", "*.jpg *.jpeg *.png *.bmp *.webp")]
+    )
+    if files:
+        selected_files = list(files)
+        status_label.config(text=f"{len(selected_files)} IMAGES READY!", fg="green")
+
+def process_images():
+    if not selected_files:
+        messagebox.showwarning("Warning", "PLEASE SELECT IMAGES FIRST")
+        return
+
+    mode = mode_var.get()
+    scale_factor = scale_slider.get() / 100.0
+    processed_images = []
+
+    if mode == "PDF":
+        save_path = filedialog.asksaveasfilename(
+            defaultextension=".pdf",
+            filetypes=[("PDF files", "*.pdf")],
+            title="Save PDF As"
+        )
+        if not save_path: return
+    else:
+        output_dir = filedialog.askdirectory(title="SELECT SAVE FOLDER")
+        if not output_dir: return
+
+    try:
+        for path in selected_files:
+            img = Image.open(path)
+            
+            original_w, original_h = img.size
+            new_w = int(original_w * scale_factor)
+            new_h = int(original_h * scale_factor)
+            resized_image = img.resize((new_w, new_h), Image.LANCZOS)
+
+            # Ensure image is RGB for PDF/JPEG compatibility
+            if resized_image.mode in ("RGBA", "P"):
+                resized_image = resized_image.convert("RGB")
+
+            if mode == "PDF":
+                processed_images.append(resized_image)
+            else:
+                # Save as individual images
+                name = os.path.basename(path)
+                prefix = 'EXPANDED_' if scale_factor > 1 else 'COMPRESSED_'
+                save_at = os.path.join(output_dir, f"{prefix}{name}")
+                resized_image.save(save_at, format='JPEG', quality=85, optimize=True)
+
+        # 2. Finalize PDF creation
+        if mode == "PDF" and processed_images:
+            processed_images[0].save(
+                save_path, 
+                save_all=True, 
+                append_images=processed_images[1:]
+            )
+
+        messagebox.showinfo('SUCCESS', 'PROCESS COMPLETED!')
+        
+    except Exception as e:
+        messagebox.showerror("Error", f"An error occurred: {e}")
+
+# --- UI Setup ---
+app = Tk()
+app.title("Image Morpher & PDF Creator")
+app.geometry("450x650")
+app.config(padx=20, pady=20, bg="#f0f0f0")
+
+Label(app, text="Image Morph", font=("Arial", 22, "bold"), bg="#f0f0f0").pack(pady=10)
+
+Button(app, text="📂 Select Images", command=select_images, width=25).pack(pady=10)
+status_label = Label(app, text="No images selected", bg="#f0f0f0", fg="gray")
+status_label.pack()
+
+Label(app, text="Choose Mode:", bg="#f0f0f0", font=("Arial", 10, "bold")).pack(pady=(20, 5))
+mode_var = StringVar(value="Shrink")
+Radiobutton(app, text="Resize (Individual)", variable=mode_var, value="Shrink", bg="#f0f0f0").pack()
+Radiobutton(app, text="Convert All to One PDF", variable=mode_var, value="PDF", bg="#f0f0f0").pack()
+
+Label(app, text="Scale Percentage:", bg="#f0f0f0").pack(pady=(20, 0))
+scale_slider = Scale(app, from_=10, to=200, orient=HORIZONTAL, length=300, bg="#f0f0f0")
+scale_slider.set(100) 
+scale_slider.pack()
+
+Button(app, text="🚀 START PROCESSING", command=process_images, bg="#4CAF50", fg="white", font=("Arial", 12, "bold"), height=2).pack(pady=40)
+
+app.mainloop()
